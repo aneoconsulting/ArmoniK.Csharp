@@ -23,6 +23,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -56,7 +57,7 @@ namespace ArmoniK.DevelopmentKit.Client.Unified.Services.Submitter;
 [MarkDownDoc]
 public class Service : AbstractClientService, ISubmitterService
 {
-  private const int MaxRetries = 5;
+  private const int MaxRetries = 10;
 
   // *** you need some mechanism to map types to fields
   private static readonly IDictionary<TaskStatus, ArmonikStatusCode> StatusCodesLookUp = new List<Tuple<TaskStatus, ArmonikStatusCode>>
@@ -209,7 +210,7 @@ public class Service : AbstractClientService, ISubmitterService
                                                          MaxRetries);
 
                                       //Delay before submission
-                                      Task.Delay(TimeSpan.FromMilliseconds(100));
+                                      Task.Delay(TimeSpan.FromMilliseconds(Properties.TimeIntervalRetriesInMs));
                                     }
                                   }
 
@@ -558,10 +559,17 @@ public class Service : AbstractClientService, ISubmitterService
            };
   }
 
+  /// <summary>
+  ///   Retrieves the results for the given taskIds.
+  /// </summary>
+  /// <param name="taskIds">The taskIds to retrieve results for.</param>
+  /// <param name="responseHandler">The action to take when a response is received.</param>
+  /// <param name="errorHandler">The action to take when an error occurs.</param>
+  /// <param name="chunkResultSize">The size of the chunk to retrieve results in.</param>
   private void ProxyTryGetResults(IEnumerable<string>                taskIds,
                                   Action<string, byte[]>             responseHandler,
                                   Action<string, TaskStatus, string> errorHandler,
-                                  int                                chunkResultSize = 500)
+                                  int                                chunkResultSize = 200)
   {
     var missing  = taskIds.ToHashSet();
     var holdPrev = missing.Count;
@@ -590,13 +598,28 @@ public class Service : AbstractClientService, ISubmitterService
             Logger?.LogTrace("Response handler for {taskId}",
                              resultStatusData.TaskId);
             responseHandler(resultStatusData.TaskId,
-                            SessionService.TryGetResultAsync(new ResultRequest
-                                                             {
-                                                               ResultId = resultStatusData.ResultId,
-                                                               Session  = SessionId,
-                                                             },
-                                                             CancellationToken.None)
-                                          .Result);
+                            Retry.WhileException(Properties.MaxRetries,
+                                                 Properties.TimeIntervalRetriesInMs,
+                                                 retry =>
+                                                 {
+                                                   if (retry > 1)
+                                                   {
+                                                     Logger?.LogWarning("Try {try} for {funcName}",
+                                                                        retry,
+                                                                        nameof(SessionService.TryGetResultAsync));
+                                                   }
+
+                                                   return SessionService.TryGetResultAsync(new ResultRequest
+                                                                                           {
+                                                                                             ResultId = resultStatusData.ResultId,
+                                                                                             Session  = SessionId,
+                                                                                           },
+                                                                                           CancellationToken.None)
+                                                                        .Result;
+                                                 },
+                                                 true,
+                                                 typeof(IOException),
+                                                 typeof(RpcException)));
           }
           catch (Exception e)
           {

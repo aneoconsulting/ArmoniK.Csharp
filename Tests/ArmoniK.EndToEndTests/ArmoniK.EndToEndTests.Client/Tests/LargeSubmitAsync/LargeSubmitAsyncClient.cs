@@ -214,7 +214,8 @@ public class LargeSubmitAsyncClient : ClientBaseTest<LargeSubmitAsyncClient>, IS
                                   .Batch(nbTasks / Props.MaxParallelChannels)
                                   .AsParallel();
 
-    var resultTask = new ConcurrentBag<string>();
+    var resultTask = new ConcurrentBag<Task<string>>();
+    var results    = new ConcurrentBag<string>();
 
     resultQueries.ForAll(bucket =>
                          {
@@ -231,11 +232,26 @@ public class LargeSubmitAsyncClient : ClientBaseTest<LargeSubmitAsyncClient>, IS
 
                            foreach (var task in tasksInBucket)
                            {
-                             resultTask.Add(task.Result);
+                             resultTask.Add(task);
                            }
                          });
 
-    return resultTask.ToList();
+    //Need to fix aync issue for a performance submission and check all exception one by one
+    resultTask.AsParallel()
+              .ForAll(task =>
+                      {
+                        if (task.IsFaulted)
+                        {
+                          if (task.Exception != null)
+                          {
+                            throw task.Exception;
+                          }
+                        }
+
+                        results.Add(task.Result);
+                      });
+
+    return results.ToList();
   }
 
   private static void OverrideTaskOptions(TaskOptions taskOptions)

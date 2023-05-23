@@ -23,10 +23,11 @@ public abstract class AbstractClientService : IDisposable
   public AbstractClientService(Properties                 properties,
                                [CanBeNull] ILoggerFactory loggerFactory = null)
   {
-    LoggerFactory = loggerFactory;
-
+    LoggerFactory           = loggerFactory;
+    Properties              = properties;
     ResultHandlerDictionary = new ConcurrentDictionary<string, IServiceInvocationHandler>();
   }
+
 
   /// <summary>
   ///   Instant view of currently handled task ids.
@@ -35,6 +36,14 @@ public abstract class AbstractClientService : IDisposable
   /// </summary>
   public IReadOnlyCollection<string> CurrentlyHandledTaskIds
     => (IReadOnlyCollection<string>)ResultHandlerDictionary.Keys;
+
+  /// <summary>
+  ///   Gets or sets the Properties object.
+  /// </summary>
+  /// <value>
+  ///   The Properties object.
+  /// </value>
+  protected Properties Properties { get; set; }
 
   /// <summary>
   ///   The result dictionary to return result

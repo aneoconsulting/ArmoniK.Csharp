@@ -319,4 +319,14 @@ public class Properties
   ///   The TaskOptions to pass to the session or the submission session
   /// </summary>
   public TaskOptions TaskOptions { get; set; }
+
+  /// <summary>
+  ///   Gets or sets the maximum number of retries. Default 5 retries
+  /// </summary>
+  public static int MaxRetries { get; set; } = 5;
+
+  /// <summary>
+  ///   Gets or sets the time interval between retries. Default 2000 ms
+  /// </summary>
+  public static int TimeIntervalRetriesInMs { get; set; } = 2000;
 }
